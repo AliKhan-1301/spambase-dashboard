@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spambase Spam Signals</title>
+<meta name="description" content="What gives spam away: an analysis of 4,210 de-duplicated emails from the UCI Spambase dataset, with a live spam-filter threshold explorer. By Ali Khan.">
+<meta name="theme-color" content="#f6f7f9">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
+<script src="dashboard-data.js"></script>
+<style>
+:root {
+  --bg: #f6f7f9; --card: #ffffff; --ink: #15181d; --muted: #5f6873; --line: #e3e6ea; --head: #15181d; --on-head: #f6f7f9;
+  --spam: #d9480f; --ham: #1c7ed6; --good: #2b8a3e; --bad: #c92a2a;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #0f1114; --card: #171a1f; --ink: #e9ecef; --muted: #98a1ab; --line: #2a2f36; --head: #1f242b; --on-head: #e9ecef;
+  --spam: #ff7a3d; --ham: #4dabf7; --good: #69db7c; --bad: #ff6b6b; color-scheme: dark } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 16px max(16px, env(safe-area-inset-left, 0px)) 32px; display: grid; gap: 16px; }
+h1, h2, h3, p { margin: 0; }
+a { color: var(--ham); }
+:focus-visible { outline: 2px solid var(--spam); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+.spam { color: var(--spam); } .ham { color: var(--ham); }
+header.top { background: var(--head); color: var(--on-head); border-radius: 12px; padding: 20px 24px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 24px; align-items: end; }
+header.top h1 { font-size: 22px; font-weight: 650; }
+header.top p { opacity: .8; font-size: 14px; max-width: 70ch; margin-top: 4px; }
+header.top a { color: inherit; font-size: 13px; opacity: .85; }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; min-width: 0; }
+.kpi .l { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.kpi .v { font-size: 30px; font-weight: 700; margin: 2px 0; }
+.kpi .s { font-size: 13px; color: var(--muted); }
+.row { display: grid; gap: 16px; }
+.r2 { grid-template-columns: 1.15fr 1fr; }
+.card h2 { font-size: 15px; font-weight: 650; }
+.card .sub { font-size: 13px; color: var(--muted); margin: 2px 0 12px; }
+.hd { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: start; gap: 8px 16px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: none; color: var(--muted); padding: 6px 12px; font: 500 13px inherit; cursor: pointer; min-height: 34px; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.chart { position: relative; height: 340px; }
+.chart.sm { height: 220px; }
+.slider { display: grid; gap: 6px; margin-bottom: 12px; }
+.slider label { font-size: 13px; color: var(--muted); }
+.slider input { width: 100%; accent-color: var(--spam); }
+.slider b { font-size: 22px; }
+.cm { display: grid; grid-template-columns: auto 1fr 1fr; gap: 6px; font-size: 13px; margin-bottom: 12px; }
+.cm div { border-radius: 8px; padding: 8px 10px; background: var(--bg); }
+.cm .h { background: none; color: var(--muted); font-size: 12px; padding: 4px 6px; }
+.cm .ok { box-shadow: inset 3px 0 0 var(--good); } .cm .err { box-shadow: inset 3px 0 0 var(--bad); }
+.cm b { display: block; font-size: 20px; }
+.mstats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+.mstats div { border-top: 2px solid var(--line); padding-top: 6px; }
+.mstats b { font-size: 20px; display: block; }
+.mstats span { font-size: 12px; color: var(--muted); }
+.callout { font-size: 13.5px; border-left: 3px solid var(--spam); padding: 2px 0 2px 10px; }
+select, input[type=search] { font: inherit; font-size: 14px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; min-height: 36px; }
+.fstats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0; font-size: 13px; }
+.fstats b { display: block; font-size: 18px; }
+.fstats span { color: var(--muted); font-size: 12px; }
+.tablewrap { overflow: auto; max-height: 520px; border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th { position: sticky; top: 0; background: var(--card); text-align: left; padding: 9px 12px; border-bottom: 2px solid var(--line); color: var(--muted); font-weight: 600; font-size: 12px; white-space: nowrap; cursor: pointer; user-select: none; }
+th:hover { color: var(--ink); }
+td { padding: 8px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td.n { text-align: right; font-variant-numeric: tabular-nums; }
+tr:hover td { background: var(--bg); }
+.bar { display: inline-block; height: 8px; border-radius: 4px; vertical-align: middle; margin-right: 6px; }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.notes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; font-size: 14px; }
+.notes ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; color: var(--muted); }
+.notes li b { color: var(--ink); font-weight: 600; }
+footer { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; }
+@media (max-width: 980px) { .kpis { grid-template-columns: repeat(2, 1fr); } .r2, .notes { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .mstats, .fstats { grid-template-columns: repeat(2, 1fr); } .kpi .v { font-size: 24px; } .chart { height: 300px; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>What gives spam away?</h1>
+      <p>4,210 emails from the UCI Spambase dataset, cleaned and analysed, with a spam filter you can tune live. Every number below is computed from the data in this repo.</p>
+    </div>
+    <div style="display:grid;gap:4px;text-align:right">
+      <a href="https://github.com/AliKhan-1301/spambase-dashboard">Code and data on GitHub ↗</a>
+      <a href="https://alikhan-1301.github.io/">By Ali Khan ↗</a>
+    </div>
+  </header>
+
+  <section class="kpis" aria-label="Headline numbers">
+    <div class="card kpi"><div class="l">Emails analysed</div><div class="v num" id="k-rows"></div><div class="s" id="k-rows-s"></div></div>
+    <div class="card kpi"><div class="l">Spam share</div><div class="v num" id="k-spam"></div><div class="s" id="k-spam-s"></div></div>
+    <div class="card kpi"><div class="l">Filter accuracy (test set)</div><div class="v num" id="k-acc"></div><div class="s" id="k-acc-s"></div></div>
+    <div class="card kpi"><div class="l">AUC (test set)</div><div class="v num" id="k-auc"></div><div class="s">1.0 is a perfect ranking of spam above real mail</div></div>
+  </section>
+
+  <section class="row r2">
+    <div class="card">
+      <div class="hd"><div><h2>The words and symbols that separate spam from real mail</h2><p class="sub">Share of emails that contain each feature at least once, top 12 by the size of the gap.</p></div>
+        <div class="seg" role="group" aria-label="Which signals"><button type="button" data-side="1" aria-pressed="true">Spam signals</button><button type="button" data-side="-1" aria-pressed="false">Real-mail signals</button></div></div>
+      <div class="chart"><canvas id="c-gap" role="img" aria-label="Grouped bar chart of feature presence in spam and real email"></canvas></div>
+      <p class="callout" id="gap-note" style="margin-top:10px"></p>
+    </div>
+    <div class="card">
+      <h2>Tune the spam filter</h2><p class="sub">Logistic regression scored on 1,263 held-out emails. Move the threshold: everything scoring above it goes to the spam folder.</p>
+      <div class="slider"><label for="th">Spam threshold: <b class="num" id="th-v">0.50</b></label><input id="th" type="range" min="0.02" max="0.98" step="0.01" value="0.5"></div>
+      <div class="cm" aria-live="polite">
+        <div class="h"></div><div class="h">Sent to spam</div><div class="h">Left in inbox</div>
+        <div class="h">Really spam</div><div class="ok"><b class="num" id="tp"></b>caught</div><div class="err"><b class="num" id="fn"></b>missed</div>
+        <div class="h">Real mail</div><div class="err"><b class="num" id="fp"></b>wrongly blocked</div><div class="ok"><b class="num" id="tn"></b>delivered</div>
+      </div>
+      <div class="mstats"><div><b class="num" id="m-acc"></b><span>accuracy</span></div><div><b class="num" id="m-pre"></b><span>precision</span></div><div><b class="num" id="m-rec"></b><span>recall</span></div><div><b class="num" id="m-f1"></b><span>F1</span></div></div>
+      <p class="callout" id="th-note"></p>
+      <div class="chart sm" style="margin-top:12px"><canvas id="c-curve" role="img" aria-label="Precision and recall against the threshold"></canvas></div>
+    </div>
+  </section>
+
+  <section class="row r2">
+    <div class="card">
+      <div class="hd"><div><h2>Feature explorer</h2><p class="sub">How one feature is distributed in spam and real mail (share of emails per range).</p></div>
+        <label class="sub" for="feat" style="margin:0">Feature <select id="feat"></select></label></div>
+      <div class="fstats" id="fstats"></div>
+      <div class="chart"><canvas id="c-hist" role="img" aria-label="Distribution of the selected feature in spam and real email"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>How good is the model?</h2><p class="sub">Test-set accuracy against two simple baselines.</p>
+      <div class="chart sm"><canvas id="c-base" role="img" aria-label="Accuracy of the model against baselines"></canvas></div>
+      <h2 style="margin-top:16px">What the model leans on</h2><p class="sub">Logistic-regression weights on standardised log features: right pushes towards spam, left towards real mail.</p>
+      <div class="chart sm" style="height:300px"><canvas id="c-coef" role="img" aria-label="Largest model weights"></canvas></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="hd"><div><h2>All 57 features</h2><p class="sub">Click a column to sort. "Corr." is the correlation of log(1+value) with the spam label.</p></div>
+      <div class="tools"><div class="seg" role="group" aria-label="Feature type" id="kinds"><button type="button" data-k="all" aria-pressed="true">All</button><button type="button" data-k="word" aria-pressed="false">Words</button><button type="button" data-k="character" aria-pressed="false">Characters</button><button type="button" data-k="capitals" aria-pressed="false">Capitals</button></div>
+        <input type="search" id="q" placeholder="Search features" aria-label="Search features"></div></div>
+    <div class="tablewrap"><table id="tbl"></table></div>
+  </section>
+
+  <section class="card notes">
+    <div><h2>How the data was cleaned</h2><ul id="clean"></ul></div>
+    <div><h2>Read this before trusting the model</h2><ul>
+      <li><b>The real mail comes from one mailbox.</b> The dataset's own documentation says the non-spam emails were collected at HP Labs, so "george", "hp", "650" (the local area code) and "1999" are among the strongest real-mail signals. The model has partly learned whose inbox this is, and would need retraining on any other mailbox.</li>
+      <li><b>Frequencies, not words.</b> Each feature is the percentage of words (or characters) in an email that match, so word order and meaning are lost.</li>
+      <li><b>Spam in 1999 looked different.</b> Use the findings as a method and a baseline, not as a description of today's spam.</li>
+    </ul></div>
+  </section>
+
+  <footer><span>Data: Hopkins, Reeber, Forman and Suermondt, Spambase, UCI Machine Learning Repository (1999).</span><span id="gen"></span></footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const C = { spam: css('--spam'), ham: css('--ham'), ink: css('--ink'), muted: css('--muted'), line: css('--line') };
+const pct = (x, d = 1) => `${(x * 100).toFixed(d)}%`;
+const fmt = x => x.toLocaleString('en-US');
+Chart.defaults.color = C.muted; Chart.defaults.borderColor = C.line; Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+Chart.defaults.animation = matchMedia('(prefers-reduced-motion: reduce)').matches ? false : { duration: 300 };
+const F = DATA.features, M = DATA.model, I = DATA.issues, N = DATA.counts;
+
+// ---- KPIs
+$('k-rows').textContent = fmt(I.rows_clean);
+$('k-rows-s').textContent = `${fmt(I.duplicates_removed)} duplicates removed from ${fmt(I.rows_raw)}`;
+$('k-spam').textContent = pct(N.spam / (N.spam + N.ham));
+$('k-spam-s').textContent = `${fmt(N.spam)} spam, ${fmt(N.ham)} real`;
+$('k-acc').textContent = pct(M.accuracy);
+$('k-acc-s').textContent = `vs ${pct(DATA.baselines.one_rule.accuracy)} for the best one-word rule`;
+$('k-auc').textContent = M.auc.toFixed(3);
+$('gen').textContent = `Analysis run ${DATA.generated} · analysis.mjs`;
+
+// ---- gap chart (spam signals vs real-mail signals)
+const gapChart = new Chart($('c-gap'), { type: 'bar', data: { labels: [], datasets: [
+  { label: 'Spam', data: [], backgroundColor: C.spam, borderRadius: 3 }, { label: 'Real mail', data: [], backgroundColor: C.ham, borderRadius: 3 }] },
+  options: { indexAxis: 'y', maintainAspectRatio: false, scales: { x: { max: 1, ticks: { callback: v => pct(v, 0) } }, y: { grid: { display: false } } },
+    plugins: { legend: { position: 'top', align: 'end', labels: { usePointStyle: true } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${pct(c.parsed.x)} of emails` } } } } });
+function showGap(side) {
+  const top = F.slice().sort((a, b) => side * ((b.spam_present - b.ham_present) - (a.spam_present - a.ham_present))).slice(0, 12);
+  gapChart.data.labels = top.map(f => f.label);
+  gapChart.data.datasets[0].data = top.map(f => f.spam_present); gapChart.data.datasets[1].data = top.map(f => f.ham_present);
+  gapChart.update();
+  const t = top[0];
+  $('gap-note').innerHTML = side > 0
+    ? `<b>"${t.label}"</b> appears in ${pct(t.spam_present, 0)} of spam but only ${pct(t.ham_present, 0)} of real mail. Spam leans on punctuation, money and calls to action.`
+    : `<b>"${t.label}"</b> appears in ${pct(t.ham_present, 0)} of real mail but ${pct(t.spam_present, 0)} of spam. These are details of one person's work inbox, not of spam in general.`;
+  document.querySelectorAll('[data-side]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.side === side));
+}
+document.querySelectorAll('[data-side]').forEach(b => b.onclick = () => showGap(+b.dataset.side));
+showGap(1);
+
+// ---- threshold explorer: recomputed live from the 1,263 test-set scores
+const S = DATA.test.score, Y = DATA.test.label, negs = Y.filter(v => !v).length;
+const at = t => { let tp = 0, fp = 0, tn = 0, fn = 0; for (let i = 0; i < S.length; i++) { const p = S[i] >= t; if (p) Y[i] ? tp++ : fp++; else Y[i] ? fn++ : tn++; }
+  return { tp, fp, tn, fn, acc: (tp + tn) / S.length, pre: tp / (tp + fp || 1), rec: tp / (tp + fn || 1), f1: 2 * tp / (2 * tp + fp + fn || 1) }; };
+const ths = Array.from({ length: 97 }, (_, i) => +(0.02 + i * 0.01).toFixed(2)), curve = ths.map(at);
+const marker = { id: 'marker', afterDatasetsDraw(c) { const x = c.scales.x.getPixelForValue(+$('th').value), { top, bottom } = c.chartArea, g = c.ctx;
+  g.save(); g.strokeStyle = C.ink; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(x, top); g.lineTo(x, bottom); g.stroke(); g.restore(); } };
+const curveChart = new Chart($('c-curve'), { type: 'line', plugins: [marker], data: { labels: ths, datasets: [
+  { label: 'Precision', data: curve.map(m => m.pre), borderColor: C.spam, pointRadius: 0, borderWidth: 2 },
+  { label: 'Recall', data: curve.map(m => m.rec), borderColor: C.ham, pointRadius: 0, borderWidth: 2 }] },
+  options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+    scales: { x: { type: 'linear', min: 0, max: 1, title: { display: true, text: 'threshold' } }, y: { min: 0.5, max: 1, ticks: { callback: v => pct(v, 0) } } },
+    plugins: { legend: { position: 'top', align: 'end', labels: { usePointStyle: true } }, tooltip: { callbacks: { title: i => `threshold ${(+i[0].label).toFixed(2)}`, label: c => `${c.dataset.label}: ${pct(c.parsed.y)}` } } } } });
+curveChart.data.datasets.forEach(d => d.data = d.data.map((y, i) => ({ x: ths[i], y })));
+function tune() {
+  const t = +$('th').value, m = at(t);
+  $('th-v').textContent = t.toFixed(2);
+  ['tp', 'fn', 'fp', 'tn'].forEach(k => $(k).textContent = fmt(m[k]));
+  $('m-acc').textContent = pct(m.acc); $('m-pre').textContent = pct(m.pre); $('m-rec').textContent = pct(m.rec); $('m-f1').textContent = pct(m.f1);
+  $('th-note').innerHTML = `At ${t.toFixed(2)}, <b>${m.fp} of ${fmt(negs)} real emails (${pct(m.fp / negs)})</b> land in the spam folder and ${m.fn} spam emails get through. ${t < 0.5 ? 'A lower threshold catches more spam but blocks more real mail.' : t > 0.5 ? 'A higher threshold protects real mail but lets more spam through.' : 'Most teams raise this, because a lost real email costs more than a missed spam.'}`;
+  curveChart.update('none');
+}
+$('th').addEventListener('input', tune); tune();
+
+// ---- feature explorer
+const groups = { word: 'Words', character: 'Characters', capitals: 'Capital letters' };
+$('feat').innerHTML = Object.entries(groups).map(([k, g]) => `<optgroup label="${g}">${F.map((f, i) => f.kind === k ? `<option value="${i}">${f.label}</option>` : '').join('')}</optgroup>`).join('');
+const histChart = new Chart($('c-hist'), { type: 'bar', data: { labels: [], datasets: [
+  { label: 'Spam', data: [], backgroundColor: C.spam, borderRadius: 2 }, { label: 'Real mail', data: [], backgroundColor: C.ham, borderRadius: 2 }] },
+  options: { maintainAspectRatio: false, scales: { y: { ticks: { callback: v => pct(v, 0) }, title: { display: true, text: 'share of emails' } }, x: { title: { display: true, text: 'value range (0 = absent)' }, grid: { display: false } } },
+    plugins: { legend: { position: 'top', align: 'end', labels: { usePointStyle: true } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${pct(c.parsed.y)}` } } } } });
+function explore(i) {
+  const f = F[i], h = DATA.hist[i], caps = f.kind === 'capitals';
+  histChart.data.labels = h.labels; histChart.data.datasets[0].data = h.spam; histChart.data.datasets[1].data = h.ham; histChart.update();
+  $('fstats').innerHTML = [[caps ? f.spam_mean.toFixed(1) : pct(f.spam_present, 0), caps ? 'spam average' : 'of spam contains it', 'spam'],
+    [caps ? f.ham_mean.toFixed(1) : pct(f.ham_present, 0), caps ? 'real-mail average' : 'of real mail contains it', 'ham'],
+    [f.corr.toFixed(2), 'correlation with spam', ''], [(f.coef > 0 ? '+' : '') + f.coef.toFixed(2), 'model weight', '']]
+    .map(([v, l, c]) => `<div><b class="num ${c}">${v}</b><span>${l}</span></div>`).join('');
+}
+$('feat').addEventListener('change', e => explore(+e.target.value));
+const start = F.findIndex(f => f.feature === 'capital_run_length_average'); $('feat').value = start; explore(start);
+
+// ---- model vs baselines, and weights
+const B = DATA.baselines;
+new Chart($('c-base'), { type: 'bar', data: { labels: ['Always "not spam"', `One rule: contains "${B.one_rule.feature}"`, 'Logistic regression'],
+  datasets: [{ data: [B.majority.accuracy, B.one_rule.accuracy, M.accuracy], backgroundColor: [C.line, C.ham, C.spam], borderRadius: 4 }] },
+  options: { indexAxis: 'y', maintainAspectRatio: false, scales: { x: { min: 0, max: 1, ticks: { callback: v => pct(v, 0) } }, y: { grid: { display: false } } },
+    plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `accuracy ${pct(c.parsed.x)}` } } } } });
+const W = F.slice().sort((a, b) => b.coef - a.coef), wTop = [...W.slice(0, 6), ...W.slice(-6)];
+new Chart($('c-coef'), { type: 'bar', data: { labels: wTop.map(f => f.label), datasets: [{ data: wTop.map(f => f.coef), backgroundColor: wTop.map(f => f.coef > 0 ? C.spam : C.ham), borderRadius: 3 }] },
+  options: { indexAxis: 'y', maintainAspectRatio: false, scales: { y: { grid: { display: false } } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `weight ${c.parsed.x.toFixed(2)}` } } } } });
+
+// ---- table
+const COLS = [['label', 'Feature'], ['kind', 'Type'], ['spam_present', 'In spam'], ['ham_present', 'In real mail'], ['gap', 'Gap'], ['spam_mean', 'Spam mean'], ['ham_mean', 'Real mean'], ['corr', 'Corr.'], ['coef', 'Model weight']];
+F.forEach(f => f.gap = f.spam_present - f.ham_present);
+let sortK = 'gap', dir = -1, kindF = 'all';
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function table() {
+  const q = $('q').value.trim().toLowerCase();
+  const rows = F.filter(f => (kindF === 'all' || f.kind === kindF) && (!q || f.label.toLowerCase().includes(q) || f.feature.includes(q)))
+    .sort((a, b) => dir * (a[sortK] < b[sortK] ? -1 : a[sortK] > b[sortK] ? 1 : 0));
+  const cell = (f, k) => k === 'label' ? `<td><b>${esc(f.label)}</b></td>` : k === 'kind' ? `<td>${f.kind}</td>`
+    : k === 'spam_present' || k === 'ham_present' ? `<td class="n"><span class="bar" style="width:${Math.round(f[k] * 60)}px;background:var(--${k === 'spam_present' ? 'spam' : 'ham'})"></span>${pct(f[k], 0)}</td>`
+    : k === 'gap' ? `<td class="n ${f.gap > 0 ? 'spam' : 'ham'}">${f.gap > 0 ? '+' : ''}${(f.gap * 100).toFixed(0)} pts</td>`
+    : `<td class="n">${f[k].toFixed(k === 'spam_mean' || k === 'ham_mean' ? (f.kind === 'capitals' ? 1 : 3) : 2)}</td>`;
+  $('tbl').innerHTML = `<thead><tr>${COLS.map(([k, l]) => `<th data-k="${k}" aria-sort="${sortK === k ? (dir > 0 ? 'ascending' : 'descending') : 'none'}">${l}${sortK === k ? (dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(f => `<tr>${COLS.map(([k]) => cell(f, k)).join('')}</tr>`).join('') || '<tr><td colspan="9">No feature matches.</td></tr>'}</tbody>`;
+}
+$('tbl').addEventListener('click', e => { const th = e.target.closest('th'); if (!th) return; const k = th.dataset.k; dir = sortK === k ? -dir : (k === 'label' || k === 'kind' ? 1 : -1); sortK = k; table(); });
+$('kinds').addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (!b) return; kindF = b.dataset.k; $('kinds').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); table(); });
+$('q').addEventListener('input', table); table();
+
+// ---- cleaning log
+$('clean').innerHTML = [
+  `<li><b>${fmt(I.rows_raw)} rows, 58 columns</b> loaded: 57 numeric features and a 0/1 spam label.</li>`,
+  `<li><b>No missing or invalid values:</b> every cell is numeric, no negatives, no percentage above 100, every label is 0 or 1.</li>`,
+  `<li><b>${fmt(I.duplicates_removed)} exact duplicates removed</b> (${pct(I.duplicates_removed / I.rows_raw)} of rows), leaving ${fmt(I.rows_clean)}. Duplicates would leak between training and test sets and inflate accuracy.</li>`,
+  `<li><b>${I.conflicting_labels} pairs of emails</b> share every feature but carry opposite labels. They were kept: no model can separate them, which caps the best possible accuracy slightly below 100%.</li>`,
+  `<li><b>Skewed features were log-transformed</b> (log 1+x) and standardised before modelling; capital-letter runs reach into the thousands.</li>`,
+  `<li><b>Stratified 70/30 split</b> with a fixed seed: ${fmt(M.train_rows)} emails to train, ${fmt(M.test_rows)} held out. Train accuracy ${pct(M.train_accuracy)} vs test ${pct(M.accuracy)}, so little overfitting.</li>`].join('');
+</script>
+</body>
+</html>
